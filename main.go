@@ -39,6 +39,18 @@ func pluralAppendS(data int) string {
 	return ""
 }
 
+func toLowerCase(text string) string {
+	var lowerCase string
+	for i := 0; i < len(text); i++ {
+		if text[i] > 64 && text[i] < 91 {
+			lowerCase += string(text[i] + 32)
+		} else {
+			lowerCase += string(text[i])
+		}
+	}
+	return lowerCase
+}
+
 func sortArray(array *[]string, wordCount map[string]int) {
 	defer wg.Done()
 	var maximumIndex int
@@ -56,7 +68,7 @@ func sortArray(array *[]string, wordCount map[string]int) {
 	}
 }
 
-func countOccurencies(text string, channel chan map[string]int) {
+func countOccurrencies(text string, channel chan map[string]int) {
 	defer wg.Done()
 	var spaces = 0
 	var start, end int
@@ -68,13 +80,7 @@ func countOccurencies(text string, channel chan map[string]int) {
 			spaces++
 		}
 	}
-	for i := 0; i < len(text); i++ {
-		if text[i] > 64 && text[i] < 91 {
-			lowerCase += string(text[i] + 32)
-		} else {
-			lowerCase += string(text[i])
-		}
-	}
+	lowerCase = toLowerCase(text)
 	var words = make([]string, 0, spaces+1)
 	for i := 0; i < len(lowerCase); i++ {
 		if i == 0 && isDivider(lowerCase[i]) {
@@ -98,23 +104,25 @@ func countOccurencies(text string, channel chan map[string]int) {
 }
 
 func printHelp() {
-	fmt.Printf("Hello to large text processing script!!!\nOutput of this script will show the most occuring words in your text.\nIt ignores case of letters.")
+	fmt.Printf("Hello to large text processing script!!!\nOutput of this script will show the most occurring words in your text.\nIt ignores case of letters.")
 	fmt.Printf("Possible arguments:\n\n-f\tUse to define text file path\n")
 	fmt.Printf("-p\tDefine count of threads to speed up processing\n")
 	fmt.Printf("-v\tVerbose mode, more info about processing\n")
 	fmt.Printf("-m\tChange ranking count, default = 5\n")
-	fmt.Printf("-t\tIf file path not used, use this to define text \n")
+	fmt.Printf("-s\tTo show time elapsed during computation\n")
+	fmt.Printf("-w\tSearch for word occurencies count\n")
+	fmt.Printf("-t\tIf file path not used, use this to define text\n")
 	fmt.Printf("\tUse \"...\" to wrap text or use -t as last parameter\n")
 }
 
-func processArgs() (bool, string, bool, bool, int, int) {
+func processArgs() (bool, string, string, bool, bool, int, int) {
 	var verbose, showTimes = false, false
-	var text, path string
+	var text, path, word string
 	var numOfThreads, rankingCount = 1, 5
 	for i := 0; i < len(os.Args); i++ {
 		if os.Args[i] == "--help" {
 			printHelp()
-			return true, text, verbose, showTimes, numOfThreads, rankingCount
+			return true, text, word, verbose, showTimes, numOfThreads, rankingCount
 		}
 		switch os.Args[i] {
 		case "-v":
@@ -133,16 +141,18 @@ func processArgs() (bool, string, bool, bool, int, int) {
 					data, err := ioutil.ReadFile(path)
 					if err != nil {
 						fmt.Println(err.Error())
-						return true, text, verbose, showTimes, numOfThreads, rankingCount
+						return true, text, word, verbose, showTimes, numOfThreads, rankingCount
 					}
 					text = string(data)
 					if len(text) == 0 {
 						fmt.Println("No text in the file")
-						return true, text, verbose, showTimes, numOfThreads, rankingCount
+						return true, text, word, verbose, showTimes, numOfThreads, rankingCount
 					}
 				}
 			case "-p":
 				numOfThreads, _ = strconv.Atoi(os.Args[i+1])
+			case "-w":
+				word = os.Args[i+1]
 			case "-m":
 				rankingCount, _ = strconv.Atoi(os.Args[i+1])
 			}
@@ -150,7 +160,7 @@ func processArgs() (bool, string, bool, bool, int, int) {
 	}
 	if len(text) == 0 {
 		fmt.Println("No text provided.\nUse -f to provide a filepath or -t to provide a text")
-		return true, text, verbose, showTimes, numOfThreads, rankingCount
+		return true, text, word, verbose, showTimes, numOfThreads, rankingCount
 	}
 	fmt.Printf("\nProcessing text%s\nUsing %d thread%s\n\n", (func() string {
 		if len(path) > 0 {
@@ -158,14 +168,14 @@ func processArgs() (bool, string, bool, bool, int, int) {
 		}
 		return "."
 	})(), numOfThreads, pluralAppendS(numOfThreads))
-	return false, text, verbose, showTimes, numOfThreads, rankingCount
+	return false, text, word, verbose, showTimes, numOfThreads, rankingCount
 }
 
 func main() {
 	var textLength, partLength, pivot, lastPivot, allWordsLength int
 	var startTime int64
 	var totalWordCounts = make(map[string]int)
-	var endNow, text, verbose, showTimes, numOfThreads, rankingCount = processArgs()
+	var endNow, text, searchedWord, verbose, showTimes, numOfThreads, rankingCount = processArgs()
 	if endNow {
 		return
 	}
@@ -188,13 +198,13 @@ func main() {
 			return
 		}
 		if numOfThreads == 1 {
-			go countOccurencies(text, wordCountsChannel)
+			go countOccurrencies(text, wordCountsChannel)
 		} else if i == 0 {
-			go countOccurencies(text[:pivot], wordCountsChannel)
+			go countOccurrencies(text[:pivot], wordCountsChannel)
 		} else if i == numOfThreads-1 {
-			go countOccurencies(text[lastPivot:], wordCountsChannel)
+			go countOccurrencies(text[lastPivot:], wordCountsChannel)
 		} else {
-			go countOccurencies(text[lastPivot:pivot], wordCountsChannel)
+			go countOccurrencies(text[lastPivot:pivot], wordCountsChannel)
 		}
 		lastPivot = pivot + 1
 	}
@@ -216,6 +226,10 @@ func main() {
 	}
 	if showTimes {
 		fmt.Printf("\nCounting words took: %s\n\n", formatTime(time.Now().UnixNano()-startTime))
+	}
+	if len(searchedWord) > 0 {
+		searchedWord = toLowerCase(searchedWord)
+		fmt.Printf("\nThe word '%s' is %d times in text\n\n", searchedWord, totalWordCounts[searchedWord])
 	}
 	var arrayToBeSortedByCount = make([]string, 0, allWordsLength)
 	for word := range totalWordCounts {
@@ -281,7 +295,7 @@ func main() {
 	for i := 0; i < allWordsLength && i < rankingCount; i++ {
 		word := sortedData[i]
 		count := totalWordCounts[word]
-		fmt.Printf("%d. %s with %d occurence%s\n", i+1, word, count, pluralAppendS(count))
+		fmt.Printf("%d. %s with %d occurrence%s\n", i+1, word, count, pluralAppendS(count))
 	}
 	if verbose || showTimes {
 		fmt.Printf("\nSorting words took: %s\n\n", formatTime(time.Now().UnixNano()-startTime))
